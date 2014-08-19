@@ -4,7 +4,7 @@ Donate link: http://todoapuestas.org/
 Tags: link
 Requires at least: 3.5.1
 Tested up to: 3.9.1
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,18 +24,22 @@ This plugin is PERFECTLY SAFE for non-WP-MU blogs, so ignore this message if you
 
 The options->alink_tap_linker_remote page will create a set of matching terms and URLs that gets stored as a list.
 
-structure of option "alink_tap_linker_remote":
+"alink_tap_linker_remote" is a serialized value as follows:
 
-  pairs => array(
-    url,      url is the original one
-    urles     urles is the url that serve the content in spanish
+  array(
+    'keyword1' => array(
+        'name' => the keyword
+        'url' => the original url
+        'urles' => the url that serve the content in spanish
+        'licencia' => 1, 0  if 1, we check if client's ip is from Spain and use the urles as link
+    ),
+    'keyword2' => array(
+        'name' => the keyword
+        'url' => the original url
+        'urles' => the url that serve the content in spanish
+        'licencia' => 1, 0  if 1, we check if client's ip is from Spain and use the urles as link
+    ),
   )
-
-  text=>	same content as pairs, but in unprocessed form (for displaying in the option's form)
-
-  plurals => 1, 0		if 1, we should look for variants of the keywords ending in s or es
-
-  licencias = 1, 0  if 1, we check if client's ip is from Spain and
 
 
 == Installation ==
@@ -67,9 +71,12 @@ This section describes how to install the plugin and get it working.
 
 == Frequently Asked Questions ==
 
+Nothing for now
 
 
 == Screenshots ==
+
+Nothing for now
 
 
 == Changelog ==
@@ -77,11 +84,30 @@ This section describes how to install the plugin and get it working.
 = 1.0 =
 * Initial release.
 
+= 1.0.1 =
+* Refactored method remote_sync of class Alink_Tap
+* Refactored method active_remote_sync of class Alink_Tap
+* Refactored method execute_linker of class Alink_Tap.
+* Change the source result from plain text to json.
+
+
 == Upgrade Notice ==
+
+= 1.0.1 =
+You must upgrade to this version. This is a minor update but with multiple refactorings.
 
 
 == Arbitrary section ==
 
+=Considerations=
+* URLs should be valid (i.e. begin with http://)
+* The same URL can appear on more than one line (i.e. with more than one keyword).
+* Because a word can only link to one site, a keyword should not appear on more than one line. If it does, only the last instance of the keyword will be matched to its URL.
+* If one of your keywords is a substring of the other--e.g. "download wordpress" and "wordpress"--then you should list the shorter one later than the first one.
+* Keywords are case-insensitive (e.g. "wordpress" is the same as "WoRdPrEsS").
+* Spaces count, so "wordpress" is not the same as "wordpress ".
+* Keywords will be linked only if they occur in your post as a word (or phrase), not as a partial word. So if one of your keywords is "a" (for some strange reason), it will be linked only when it occurs as the word "a"--when the letter "a" occurs within a word, it will not be linked.
+* You can use any valid target attribute, not just "_blank"--see <a href="http://www.w3schools.com/tags/tag_a.asp">W3C</a> for a list of valid targets.
 
 
 == Updates ==
