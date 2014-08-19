@@ -4,7 +4,7 @@ Donate link: http://todoapuestas.org/
 Tags: link
 Requires at least: 3.5.1
 Tested up to: 3.9.1
-Stable tag: 1.0.1
+Stable tag: 1.0.1.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,6 +19,18 @@ If you aren't sure whether you are using a WP-MU blog, then you aren't. Trust me
 For WP-MU administrators: You should not use this plugin. Your users could use it to place (potentially malicious) javascript into their blogs.
 
 This plugin is PERFECTLY SAFE for non-WP-MU blogs, so ignore this message if you're using regular wordpress (you probably are).
+
+= Considerations =
+
+* URLs should be valid (i.e. begin with http://)
+* The same URL can appear on more than one line (i.e. with more than one keyword).
+* Because a word can only link to one site, a keyword should not appear on more than one line. If it does, only the last instance of the keyword will be matched to its URL.
+* If one of your keywords is a substring of the other--e.g. "download wordpress" and "wordpress"--then you should list the shorter one later than the first one.
+* Keywords are case-insensitive (e.g. "wordpress" is the same as "WoRdPrEsS").
+* Spaces count, so "wordpress" is not the same as "wordpress ".
+* Keywords will be linked only if they occur in your post as a word (or phrase), not as a partial word. So if one of your keywords is "a" (for some strange reason), it will be linked only when it occurs as the word "a"--when the letter "a" occurs within a word, it will not be linked.
+* You can use any valid target attribute, not just "_blank"--see <a href="http://www.w3schools.com/tags/tag_a.asp">W3C</a> for a list of valid targets.
+
 
 = DATABASE STRUCTURE =
 
@@ -40,7 +52,6 @@ The options->alink_tap_linker_remote page will create a set of matching terms an
         'licencia' => 1, 0  if 1, we check if client's ip is from Spain and use the urles as link
     ),
   )
-
 
 == Installation ==
 
@@ -90,6 +101,8 @@ Nothing for now
 * Refactored method execute_linker of class Alink_Tap.
 * Change the source result from plain text to json.
 
+= 1.0.1.1 =
+* Include some missing files in version 1.0.1
 
 == Upgrade Notice ==
 
@@ -99,16 +112,7 @@ You must upgrade to this version. This is a minor update but with multiple refac
 
 == Arbitrary section ==
 
-=Considerations=
-* URLs should be valid (i.e. begin with http://)
-* The same URL can appear on more than one line (i.e. with more than one keyword).
-* Because a word can only link to one site, a keyword should not appear on more than one line. If it does, only the last instance of the keyword will be matched to its URL.
-* If one of your keywords is a substring of the other--e.g. "download wordpress" and "wordpress"--then you should list the shorter one later than the first one.
-* Keywords are case-insensitive (e.g. "wordpress" is the same as "WoRdPrEsS").
-* Spaces count, so "wordpress" is not the same as "wordpress ".
-* Keywords will be linked only if they occur in your post as a word (or phrase), not as a partial word. So if one of your keywords is "a" (for some strange reason), it will be linked only when it occurs as the word "a"--when the letter "a" occurs within a word, it will not be linked.
-* You can use any valid target attribute, not just "_blank"--see <a href="http://www.w3schools.com/tags/tag_a.asp">W3C</a> for a list of valid targets.
-
+Nothing for now
 
 == Updates ==
 
