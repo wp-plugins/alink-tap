@@ -4,7 +4,7 @@ Donate link: http://todoapuestas.org/
 Tags: link
 Requires at least: 3.5.1
 Tested up to: 3.9.1
-Stable tag: 1.0.1
+Stable tag: 1.0.1.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -101,6 +101,8 @@ Nothing for now
 * Refactored method execute_linker of class Alink_Tap.
 * Change the source result from plain text to json.
 
+= 1.0.1.1 =
+* Include some missing files in version 1.0.1
 
 == Upgrade Notice ==
 
