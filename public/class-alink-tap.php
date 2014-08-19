@@ -24,11 +24,11 @@ class Alink_Tap {
 	/**
 	 * Plugin version, used for cache-busting of style and script file references.
 	 *
-	 * @since   1.0.0
+	 * @since   1.0.1
 	 *
 	 * @var     string
 	 */
-	const VERSION = '1.0.0';
+	const VERSION = '1.0.1';
 
 	/**
 	 *
@@ -74,9 +74,14 @@ class Alink_Tap {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_styles' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 
+        /**
+         * Define the default options
+         *
+         * @since     1.0.1
+         */
         $this->default_options = array(
             'domain' => $_SERVER["HTTP_HOST"],
-            'url_sync_link' => 'http://www.todoapuestas.org/syncKbLink.php',
+            'url_sync_link' => 'http://www.todoapuestas.org/listBlogsLinksJson.php',
             'url_get_country_from_ip' => 'http://www.todoapuestas.org/getCountryFromIP.php',
             'plurals' => 1,
         );
@@ -88,8 +93,8 @@ class Alink_Tap {
 		 *
 		 * add_filter ( 'hook_name', 'your_filter', [priority], [accepted_args] );
 		 */
-        add_action( 'sync_hourly_event', array( $this, 'sync_remote_server' ) );
-        add_action( 'wp' , array( $this, 'active_sync_remote_server'));
+        add_action( 'sync_hourly_event', array( $this, 'remote_sync' ) );
+        add_action( 'wp' , array( $this, 'active_remote_sync'));
 
         add_filter( 'the_content', array( $this, 'execute_linker' ), 9 );
 
@@ -243,11 +248,14 @@ class Alink_Tap {
 	/**
 	 * Fired for each blog when the plugin is activated.
 	 *
-	 * @since    1.0.0
+	 * @since    1.0.1
 	 */
 	private static function single_activate() {
 		add_option('alink_tap_linker_remote_info', self::get_instance()->default_options);
         add_option('alink_tap_linker_remote', null);
+
+        // execute initial synchronization
+        self::get_instance()->remote_sync();
 	}
 
 	/**
@@ -259,8 +267,8 @@ class Alink_Tap {
 		delete_option('alink_tap_linker_remote_info');
         delete_option('alink_tap_linker_remote');
 
-        remove_action( 'sync_hourly_event', array( self::$instance, 'sync_remote_server' ) );
-        remove_action( 'wp' , array( self::$instance, 'active_sync_remote_server'));
+        remove_action( 'sync_hourly_event', array( self::$instance, 'remote_sync' ) );
+        remove_action( 'wp' , array( self::$instance, 'active_remote_sync'));
 
         remove_filter( 'the_content', array( self::$instance, 'execute_linker' ) );
 	}
@@ -298,35 +306,33 @@ class Alink_Tap {
 		wp_enqueue_script( $this->plugin_slug . '-plugin-script', plugins_url( 'assets/js/public.js', __FILE__ ), array( 'jquery' ), self::VERSION );
 	}
 
-	/**
-	 * NOTE:  Actions are points in the execution of a page or process
-	 *        lifecycle that WordPress fires.
-	 *
-	 *        Actions:    http://codex.wordpress.org/Plugin_API#Actions
-	 *        Reference:  http://codex.wordpress.org/Plugin_API/Action_Reference
-	 *
-	 * @since    1.0.0
-	 */
-//	public function action_method_name() {
-//		// @TODO: Define your action hook callback here
-//	}
-
-    public function active_sync_remote_server() {
-
+    /**
+     *
+     * @since   1.0.1
+     */
+    public function active_remote_sync() {
         if ( !wp_next_scheduled( 'sync_hourly_event' ) ) {
-
             wp_schedule_event(time(), 'hourly', 'sync_hourly_event');
-
         }
-
     }
 
-    public function sync_remote_server() {
+    /**
+     * Execute synchronizations from todoapuestas.org server
+     *
+     * @since   1.0.1
+     * @param string $d
+     * @return array|void
+     */
+    public function remote_sync($d = null) {
         // do something every hour
-
         $option = get_option('alink_tap_linker_remote_info', $this->default_options);
 
-        $domain = $option['domain'];
+        $domain = $d;
+        if(is_null($d) && empty($option['domain']))
+            $domain = $_SERVER["HTTP_HOST"];
+        else if(!empty($option['domain']))
+            $domain = $option['domain'];
+
         $url_sync_link = esc_url($option['url_sync_link']);
         $remote_plurals = $option['plurals'];
 
@@ -336,102 +342,49 @@ class Alink_Tap {
 
         // Get values from TAP
         $url = $url_sync_link."?domain=". $domain;
-        $atLinks = file_get_contents($url);
-        $crlf = "\r\n";
-        $atLinks .= $crlf;
+        $atLinks = trim(file_get_contents($url));
+        $list_site_links = json_decode($atLinks, true);
         switch(preg_match('/^w{3}./', $domain)){
             case 1:
                 $url = $url_sync_link."?domain=".preg_replace('/^w{3}./','',$domain);
-                $atLinks .= " ".file_get_contents($url);
+                $atLinks = trim(file_get_contents($url));
                 break;
             default:
                 $url = $url_sync_link."?domain=www.".$domain;
-                $atLinks .= " ". file_get_contents($url);
+                $atLinks = trim(file_get_contents($url));
                 break;
         }
+        $list_site_links = array_merge($list_site_links, json_decode($atLinks, true));
 
-        $pairs = str_replace("\r", '', $atLinks);
+        if(is_null($d) && !empty($list_site_links)){
+            update_option('alink_tap_linker_remote', $list_site_links);
+        }
 
-        $pairs = explode("\n", $pairs);
-
-        foreach( $pairs as $pair ){
-
-            /**
-
-             * Se obtiene de syncKbLink.php el siguiente formato :
-
-             * ' ["name"]->["url"]->["urles"]->["licencia_esp"]\n '
-
-             */
-
-            $pair = trim( $pair ); // no leading or trailing spaces. Can mess with the "target" thing in function kb_linker()
-
-            $pair = explode( "->", $pair );
-
-            if ( ( '' != $pair[0] ) && ( ('' != $pair[1]) || ('' != $pair[2])) ){
-
-                $new[ $pair[0] ] = array('url' => $pair[1], 'urles'=> $pair[2]);
-
-            }
-
-            if ( ( '' != $pair[0] ) && ( '' != $pair[3] ) )
-
-                $licencia_esp[ $pair[0] ] = $pair[3];
-
-        }//foreach
-
-        $pairs = $new;	// contains the pairs as an array for use by the filter
-
-        $text = $atLinks;	// contains the pairs as entered in the form for display below
-
-        $licencias = $licencia_esp;
-
-
-        $option = array( 'pairs'=>$pairs, 'text'=>$text, 'plurals'=>$remote_plurals, 'licencias'=>$licencias);	// store both versions of the option, pairs and text
-
-        update_option( 'alink_tap_linker_remote', $option );
+        if(!is_null($d))
+            return $list_site_links;
     }
 
-
     /**
-	 * NOTE:  Filters are points of execution in which WordPress modifies data
-	 *        before saving it or sending it to the browser.
-	 *
-	 *        Filters: http://codex.wordpress.org/Plugin_API#Filters
-	 *        Reference:  http://codex.wordpress.org/Plugin_API/Filter_Reference
-	 *
-	 * @since    1.0.0
-	 */
-//	public function filter_method_name() {
-//        // @TODO: Define your filter hook callback here
-//	}
-
+     * Filter the content and change de occurrences of keyword to links
+     *
+     * @since   1.0.1
+     * @param $content
+     * @return string
+     */
     public function execute_linker($content) {
         global $alink_tap_special_chars,$alink_tap_title_text;
         $pairs = $text = $plurals = $licencias = null;
 
-        $option = get_option('alink_tap_linker_remote');
+        $list_site_links = get_option('alink_tap_linker_remote');
 
-        if (is_array($option)){
-            extract($option);
-        }
-
-        // uncomment for testing (to override options):
-//        $pairs = array( 'contributor'=>'http://google.com', 'a'=>'http://yahoo.com/', 'scripting'=>'scripting', 'don'=>'don', 'first post'=>'firstpost.org', 'first'=>'first.org', 'wp'=>'WP.ORG');
-
-        if ( !is_array($pairs) )
+        if ( empty($list_site_links))
             return $content;
 
         // let's make use of that special chars setting.
-
         if (is_array($alink_tap_special_chars)){
-
             foreach ($alink_tap_special_chars as $char => $code){
-
                 $content = str_replace($code,$char,$content);
-
             }
-
         }
 
         // needed below...
@@ -443,64 +396,49 @@ class Alink_Tap {
         $ip = $_SERVER['REMOTE_ADDR'];
 
         $remote_info = get_option('alink_tap_linker_remote_info', $this->default_options);
+        $plurals = $remote_info['plurals'];
         $url_get_country_from_ip = esc_url($remote_info['url_get_country_from_ip']);
 
         $userUrl = $url_get_country_from_ip."?ip=". $ip;
 
         $country = trim(file_get_contents($userUrl));
 
-        foreach ($pairs as $keyword => $url_array){
+//        foreach ($pairs as $keyword => $url_array){
+        foreach ( $list_site_links as $house ){
+            $keyword = '';
+            if(isset($house['name']))
+                $keyword = $house['name'];
 
             // Compruebo si es un usuario de Spain. Si lo es, compruebo si la key es con licencia_esp, si no, paso al siguiente
 
-            if($country == "Spain" && !empty($licencias)){
-
-                $licenciaESP = $licencias[$keyword];
-
-                $url = $url_array['urles'];
-
-                if(!$licenciaESP) continue;
-
+            if($country == "Spain" && !empty($house)){
+                $url = $house['urles'];
+                if(!$house['licencia']) continue;
             } else {
-
-                $url = $url_array['url'];
-
+                $url = $house['url'];
             }
 
-            /**if (in_array( $url, $usedUrls )) // don't link to the same URL more than once
-
-            continue;
-
-            if (strpos( $content, $url )){ // we've already used this URL, or it was manually inserted by author into post
-
-            $usedUrls[] = $url;
-
-            continue;
-
-            }*/
+//            if (in_array( $url, $usedUrls )) // don't link to the same URL more than once
+//                continue;
+//
+//            if (strpos( $content, $url )){ // we've already used this URL, or it was manually inserted by author into post
+//                $usedUrls[] = $url;
+//                continue;
+//            }
 
             if ($url == $currentUrl){ // don't link a page to itself
-
                 $usedUrls[] = $url;
-
                 continue;
-
             }
 
             // first, let's check whether we've got a "target" attribute specified.
 
             if (false!==strpos( $url, ' ' ) ){	// Let's not waste CPU resources unless we see a ' ' in the URL:
-
                 $target = trim(   substr( $url, strpos($url,' ') )   );
-
                 $target = ' target="'.$target.'"';
-
                 $url = substr( $url, 0, strpos($url,' ') );
-
             }else{
-
                 $target='';
-
             }
 
             // let's escape any '&' in the URL.
@@ -508,7 +446,6 @@ class Alink_Tap {
             $url = str_replace( '&amp;', '&', $url ); // this might seem unnecessary, but it prevents the next line from double-escaping the &
 
             $url = str_replace( '&', '&amp;', $url );
-
 
 
             // we don't want to link the keyword if it is already linked.
