@@ -3,9 +3,9 @@
  * Alink Tap.
  *
  * @package   Alink_Tap_Admin
- * @author    Alain Sanchez <asanchezg@inetzwerk.com>
+ * @author    Alain Sanchez <luka.ghost@gmail.com>
  * @license   GPL-2.0+
- * @link      http://www.inetzwerk.com
+ * @link      http://www.linkedin.com/in/mrbrazzi/
  * @copyright 2014 Alain Sanchez
  */
 
@@ -18,7 +18,7 @@
  *
  *
  * @package Alink_Tap_Admin
- * @author  Alain Sanchez <asanchezg@inetzwerk.com>
+ * @author  Alain Sanchez <luka.ghost@gmail.com>
  */
 class Alink_Tap_Admin {
 
@@ -176,7 +176,7 @@ class Alink_Tap_Admin {
 		$this->plugin_screen_hook_suffix = add_options_page(
 			__( 'Alink Tap', $this->plugin_slug ),
 			__( 'Alink Tap', $this->plugin_slug ),
-			5,
+			'manage_options',
 			$this->plugin_slug,
 			array( $this, 'display_plugin_admin_page' )
 		);
