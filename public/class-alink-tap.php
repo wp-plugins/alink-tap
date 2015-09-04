@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name.
+ * Alink Tap.
  *
  * @package   Alink_Tap
  * @author    Alain Sanchez <luka.ghost@gmail.com>
@@ -24,11 +24,11 @@ class Alink_Tap {
 	/**
 	 * Plugin version, used for cache-busting of style and script file references.
 	 *
-	 * @since   1.0.1
+	 * @since   1.1.0.1
 	 *
 	 * @var     string
 	 */
-	const VERSION = '1.0.1';
+	const VERSION = '1.1.3';
 
 	/**
 	 *
@@ -387,13 +387,15 @@ class Alink_Tap {
      * Filter the content and change de occurrences of keyword to links
      *
      * @since   1.0.1
-     * @updated 1.1.0.0
+     * @updated 1.1.0.1
      * @param $content
      * @return string
      */
     public function execute_linker($content) {
         global $alink_tap_special_chars,$alink_tap_title_text;
         $pairs = $text = $plurals = $licencias = null;
+
+        ini_set('memory_limit', -1);
 
         $list_site_links = get_option('alink_tap_linker_remote');
         if ( empty($list_site_links))
@@ -407,24 +409,14 @@ class Alink_Tap {
         }
 
         // needed below...
-
-        $oauthAccessToken = $this->get_oauth_access_token();
-
-        $timestamp = new DateTime("now");
+        $remote_info = get_option('alink_tap_linker_remote_info', $this->default_options);
+        $plurals = $remote_info['plurals'];
 
         $usedUrls = array();
 
         $currentUrl = site_url(); // may not work on all hosting setups.
 
-        $ip = $_SERVER['REMOTE_ADDR'];
-
-        $remote_info = get_option('alink_tap_linker_remote_info', $this->default_options);
-        $plurals = $remote_info['plurals'];
-
-        $apiUrl = esc_url(sprintf($remote_info['url_get_country_from_ip'], $ip, $oauthAccessToken, $timestamp->getTimestamp()));
-        $apiResponse = wp_remote_get($apiUrl);
-
-        $country = json_decode($apiResponse['body'], true);
+        $country = $this->get_country_by_ip($remote_info);
 
 //        $url_get_country_from_ip = esc_url($remote_info['url_get_country_from_ip']);
 //        $userUrl = $url_get_country_from_ip."?ip=". $ip;
@@ -433,12 +425,12 @@ class Alink_Tap {
 //        foreach ($pairs as $keyword => $url_array){
         foreach ( $list_site_links as $house ){
             $keyword = '';
-            if(isset($house['name']))
-                $keyword = $house['name'];
+            if(isset($house['nombre']))
+                $keyword = $house['nombre'];
 
             // Compruebo si es un usuario de Spain. Si lo es, compruebo si la key es con licencia_esp, si no, paso al siguiente
 
-            if(isset($country['country']) && strcmp($country['country'],'Spain') == 0 && !empty($house)){
+            if(null != $country && isset($country['country']) && strcmp($country['country'],'Spain') === 0 && !empty($house)){
                 $url = $house['urles'];
                 if(!$house['licencia']) continue;
             } else {
@@ -544,8 +536,9 @@ class Alink_Tap {
         }
 
         // get rid of our '&&&' things.
-
         $content = str_replace( '&&&', '', $content);
+
+        ini_restore('memory_limit');
 
         return $content;
     }
@@ -560,22 +553,77 @@ class Alink_Tap {
      */
     private function get_oauth_access_token()
     {
+        session_start();
+        if(isset($_SESSION['TAP_OAUTH_CLIENT'])){
+            $now = new DateTime('now');
+            if($now->getTimestamp() <= intval($_SESSION['TAP_OAUTH_CLIENT']['expires_in'])){
+                $oauthAccessToken = $_SESSION['TAP_OAUTH_CLIENT']['access_token'];
+                return $oauthAccessToken;
+            }
+            unset($_SESSION['TAP_OAUTH_CLIENT']);
+        }
+
         $oauthUrl = get_option('TAP_OAUTH_CLIENT_CREDENTIALS_URL');
         $publicId = get_option('TAP_PUBLIC_ID');
         $secretKey = get_option('TAP_SECRET_KEY');
         if(empty($publicId) || empty($secretKey)){
-            throw new Exception('No public o secret key given');
+            throw new Exception('No public or secret key given');
         }
 
         $oauthUrl = sprintf($oauthUrl, $publicId, $secretKey);
         $oauthResponse = wp_remote_get($oauthUrl);
+        if($oauthResponse instanceof WP_Error || strcmp($oauthResponse['response']['code'], '200') !== 0){
+            throw new \Exception('Invalid OAuth response');
+        }
+
         $oauthResponseBody = json_decode($oauthResponse['body']);
         $oauthAccessToken = null;
-        if(!is_object($oauthResponseBody)){
-            throw new Exception('Invalid OAuth response');
+        if($oauthResponseBody instanceof WP_Error || !is_object($oauthResponseBody)){
+            throw new \Exception('Invalid OAuth access token');
         }
         $oauthAccessToken = $oauthResponseBody->access_token;
 
+        if(!isset($_SESSION['TAP_OAUTH_CLIENT'])){
+            $now = new DateTime('now');
+            $_SESSION['TAP_OAUTH_CLIENT'] = array(
+                'access_token' => $oauthAccessToken,
+                'expires_in' => $now->getTimestamp() + intval($oauthResponseBody->expires_in)
+            );
+        }
+
         return $oauthAccessToken;
+    }
+
+    private function get_country_by_ip($remote_info)
+    {
+        session_start();
+        $ip = $_SERVER['REMOTE_ADDR'];
+        if(isset($_SESSION['TAP_ALINK_TAP'])){
+            if(strcmp($ip, $_SESSION['TAP_ALINK_TAP']['client_ip']) === 0){
+                $country = $_SESSION['TAP_ALINK_TAP']['client_country'];
+                return $country;
+            }
+            unset($_SESSION['TAP_ALINK_TAP']);
+        }
+
+        $oauthAccessToken = $this->get_oauth_access_token();
+
+        $now = new DateTime("now");
+
+        $apiUrl = esc_url(sprintf($remote_info['url_get_country_from_ip'], $ip, $oauthAccessToken, $now->getTimestamp()));
+        $apiResponse = wp_remote_get($apiUrl);
+        if($apiResponse instanceof WP_Error || (!empty($apiResponse['body']) && strcmp($apiResponse['response']['code'], '200') !== 0)){
+            throw new \Exception('Invalid API response');
+        }
+        $country = json_decode($apiResponse['body'], true);
+
+        if(!isset($_SESSION['TAP_ALINK_TAP'])){
+            $_SESSION['TAP_ALINK_TAP'] = array(
+                'client_ip' => $ip,
+                'client_country' => $country
+            );
+        }
+
+        return $country;
     }
 }
